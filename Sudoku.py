@@ -4,7 +4,9 @@ class Sudoku:
         self.n_vars = 0
         self.n_clauses = 0
         self.rules = []
-        self.assignments = []
+        self.constraints = []
+        self.clauses = []
+        self.assignments = {}
 
     def __str__(self):
         return (f"Sudoku CNF with {self.n_vars} variables, "

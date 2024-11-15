@@ -44,8 +44,52 @@ def encode_puzzle_to_dimacs(puzzle_path: str, grid_size: int = 4):
     return constraints
 
 
-def apply_simplification():
-    pass
+def apply_simplification(sudoku: Sudoku):
+    simplified_clauses = []
+    
+    for clause in sudoku.clauses:
+        literal_set = set(clause)
+
+        # Tautology
+        if any(-literal in literal_set for literal in literal_set):
+            continue
+
+        # Unit Clause 
+        if len(clause) == 1:
+            unit_literal = clause[0]
+            variable = abs(unit_literal)
+            value = unit_literal > 0 
+    
+            sudoku.assignments[variable] = value
+            continue
+
+        simplified_clauses.append(clause)
+    
+    final_clauses = []
+
+    for clause in simplified_clauses:
+        simplified_clause = []
+
+        if any(sudoku.assignments.get(abs(literal), None) == (literal > 0) for literal in clause):
+            print(f"Removed satisfied clause: {clause}")
+            continue
+
+        for literal in clause:
+            if sudoku.assignments.get(abs(literal), None) != (literal < 0):
+                simplified_clause.append(literal)
+            else:
+                pass
+                #print(f"Removed falsified literal {literal} from clause: {clause}")
+
+        if simplified_clause:
+            final_clauses.append(simplified_clause)
+
+    sudoku.clauses = final_clauses
+
+    
+    # Pure Literal 
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -56,7 +100,10 @@ if __name__ == "__main__":
     parser.add_argument("--puzzle_path", type=str)
     args = parser.parse_args()
 
-    test = encode_rules_in_dimac(args.rules_path)
-    constraints = encode_puzzle_to_dimacs(args.puzzle_path)
-    test.assignments = constraints
-    print(test)
+    sudoku = encode_rules_in_dimac(args.rules_path)
+    sudoku.constraints = encode_puzzle_to_dimacs(args.puzzle_path)
+    sudoku.clauses = sudoku.rules + sudoku.constraints
+    print(sudoku)
+    print(f"## Number of Clauses {len(sudoku.clauses)}\n")
+    apply_simplification(sudoku)
+    print(f"## Number of Clauses {len(sudoku.clauses)}\n")
