@@ -100,7 +100,6 @@ def handle_unit_clauses(sudoku: Sudoku):
     #print(f"UNIT LEFT: {unit_clauses_left}\n")
     #print(f"Removed clauses: {removed_clauses}\n")
     if unit_clauses_left:
-        print(f"Recursion entered\n")
         handle_unit_clauses(sudoku)
 
 
@@ -153,6 +152,32 @@ def get_candidate_variables(sudoku: Sudoku):
     sudoku.split_vars = candidate_variables
 
 
+def apply_mom_heuristic(sudoku: Sudoku):
+    """
+    Apply the Maximum Occurrence in the remaining clauses (MOM) heuristic
+    to choose the next variable to split on.
+    """
+    # Step 1: Count the occurrences of each variable in the remaining clauses
+    variable_count = {}
+
+    for clause in sudoku.clauses:
+        for literal in clause:
+            variable = abs(literal)  # Ignore the sign, consider only the variable itself
+            if variable not in sudoku.assignments:  # Only consider unassigned variables
+                if variable not in variable_count:
+                    variable_count[variable] = 0
+                variable_count[variable] += 1
+
+    # Step 2: Choose the variable that appears in the most clauses
+    if variable_count:
+        selected_variable = max(variable_count, key=variable_count.get)
+        #print(f"Selected variable (MOM heuristic): {selected_variable}")
+        return selected_variable
+    else:
+        # If no unassigned variables, the puzzle is either solved or unsatisfiable
+        print("No more variables to split on.")
+        return None
+
 
 def splitting(sudoku: Sudoku):
     if all_clauses_satisfied(sudoku):
@@ -171,7 +196,10 @@ def splitting(sudoku: Sudoku):
         print("Solution found after unit propagation!")
         return True
 
-    variable = pick_random_variable(sudoku)
+    #variable = pick_random_variable(sudoku)
+    variable = apply_mom_heuristic(sudoku)
+    if variable is None:
+        return False
     sudoku.split_vars.remove(variable)
 
     # Step 6: Try assigning True and recursively solve
@@ -259,35 +287,19 @@ def simple_dpll(rules_file, puzzle_file, grid_size):
         n_vars=grid_size*grid_size*grid_size
     )
 
-    print(f"###Num of rules: {len(sudoku.rules)}\n")
-    print(f"###Num of constraints: {len(sudoku.constraints)}\n")
-    print(f"###Num of clauses: {len(sudoku.clauses)}\n")
     init_simplification(sudoku)
-    print(f"### INIT DONE, Clauses Left: {len(sudoku.clauses)}\n")
 
     if not sudoku.satisfiable:
-        print(f"###Sudoku not satisfiable!\n")
+        print(f"Sudoku not satisfiable!\n")
         return
-    
-    if(not all_clauses_satisfied(sudoku)):
-        print(f"-> Not all clauses satisfied!\n")
 
     get_candidate_variables(sudoku)
 
     splitting(sudoku)
 
     true_literals = {literal if value else -literal for literal, value in sudoku.assignments.items() if value}
-    print(f"###SOLUTION: {true_literals}\n")
+    print(f"Solved Sudoku:\n")
     print_sudoku(true_literals)
-
-
-    print(f"###Num of clauses END: {len(sudoku.clauses)}\n")
-    # Simplify Clauses
-    #result = dpll(sudoku)
-    #if result:
-    #    print(f"Solution found: {sudoku.assignments}")
-    #else:
-    #    print("No solution found.")
 
 
 def get_grid_size(puzzle_path):
