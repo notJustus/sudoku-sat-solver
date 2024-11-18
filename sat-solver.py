@@ -46,31 +46,6 @@ def remove_tautologies(sudoku: Sudoku):
             sudoku.clauses.remove(clause)
 
 
-# def handle_unit_clauses(sudoku: Sudoku):
-#     for clause in sudoku.clauses:
-#         if len(clause) == 1:
-#             unit_literal = clause[0]
-#             variable = abs(unit_literal)
-#             value = unit_literal > 0 
-    
-#             sudoku.assignments[variable] = value
-#             sudoku.clauses.remove(clause)
-    
-#     true_literals = [key for key, value in sudoku.assignments.items() if value]
-#     false_literals = [key for key, value in sudoku.assignments.items() if not value]
-
-#     for clause in sudoku.clauses:
-
-#         for literal in clause:
-#             if true_literals.contains(literal):
-#                 sudoku.clauses.remove(clause)
-#             elif true_literals.contains(abs(literal)):
-#                 # remove literal from clause
-#             elif false_literals.contains(literal):
-#                 # remove literal from clause
-
-#         # Don't really get the last case
-
 def handle_unit_clauses(sudoku: Sudoku):
     unit_clauses = [clause for clause in sudoku.clauses if len(clause) == 1]
     print(f"Unit Clauses: {unit_clauses}\n")
@@ -113,7 +88,10 @@ def handle_unit_clauses(sudoku: Sudoku):
             else:
                 modified_clause.append(literal)
 
-        if not remove_clause and modified_clause:
+        if not remove_clause:
+            # If empty clause found, sudoku not satisfiable
+            if not modified_clause:
+                sudoku.satisfiable = False
             updated_clauses.append(modified_clause)
 
     unit_clauses_left = [clause for clause in updated_clauses if len(clause) == 1]
@@ -186,23 +164,72 @@ def dpll(sudoku: Sudoku):
     return False
 
 
-def simple_dpll(rules_file, puzzle_file):
+
+#def all_clauses_satisfied(sudoku: Sudoku):
+    for clause in sudoku.clauses:
+        for literal in clause:
+            if not sudoku.assignments[literal]:
+                return False
+            
+        
+def all_clauses_satisfied(sudoku: Sudoku):
+    for clause in sudoku.clauses:
+        satisfied = False
+        for literal in clause:
+            variable = abs(literal)
+            value = sudoku.assignments.get(variable, None)
+
+            if value is not None and ((literal > 0 and value) or (literal < 0 and not value)):
+                satisfied = True
+                break
+
+        if not satisfied:
+            return False
+
+    return True 
+
+
+def all_clauses_consistent(sudoku: Sudoku):
+    for clause in sudoku.clauses:
+        if len(clause) == 0:
+            return False
+
+
+def simple_dpll(rules_file, puzzle_file, grid_size):
     # Encode rules and puzzle in dimacs
     rules = encode_rules_in_dimac(rules_file)
     constraints = encode_puzzle_in_dimacs(puzzle_file)
     sudoku = Sudoku(
         rules=rules,
         constraints=constraints,
-        clauses=rules+constraints
+        clauses=rules+constraints,
+        grid_size=grid_size
     )
 
+    n_vars = (sudoku.grid_size * sudoku.grid_size) * sudoku.grid_size
     print(f"###Num of rules: {len(sudoku.rules)}\n")
     print(f"###Num of constraints: {len(sudoku.constraints)}\n")
     print(f"###Num of clauses: {len(sudoku.clauses)}\n")
     apply_simplification(sudoku)
-    for clause in sudoku.clauses:
-        if len(clause) == 0:  # An empty clause has no literals
-            print(f"!! FOUND EMPTRY ONE")
+
+    if not sudoku.satisfiable:
+        print(f"Sudoku not satisfiable!\n")
+        #return
+    
+    if(not all_clauses_satisfied(sudoku)):
+        print(f"-> Not all clauses satisfied!\n")
+    while not all_clauses_satisfied(sudoku):
+        print(f"Keep splitting!\n")
+        # Pick a variable and truth assignment
+        assert(len(sudoku.assignments) == n_vars), "Already assigned truth values to all variables\n"
+        
+
+        # Simplify clauses
+
+        # if inconsistent -> backtrack 
+        # if satisfied -> finished
+
+
     print(f"###Num of clauses END: {len(sudoku.clauses)}\n")
     # Simplify Clauses
     #result = dpll(sudoku)
@@ -236,7 +263,7 @@ if __name__ == "__main__":
     print(f"RULES FILE: {rules_file}\n")
 
     if args.strategy == 1:
-        simple_dpll(rules_file, args.puzzle_file)
+        simple_dpll(rules_file, args.puzzle_file, grid_size)
     elif args.strategy == 2:
         pass
     elif args.strategy == 3:
