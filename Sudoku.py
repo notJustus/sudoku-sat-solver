@@ -1,11 +1,10 @@
 class Sudoku:
-    def __init__(self) -> None:
+    def __init__(self, rules=None, constraints=None, clauses=None) -> None:
         self.comment = []
         self.n_vars = 0
-        self.n_clauses = 0
-        self.rules = []
-        self.constraints = []
-        self.clauses = []
+        self.rules = rules if rules is not None else []
+        self.constraints = constraints if constraints is not None else []
+        self.clauses = clauses if clauses is not None else []
         self.assignments = {}
 
     def __str__(self):
