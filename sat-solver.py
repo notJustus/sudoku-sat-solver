@@ -2,6 +2,7 @@ import os
 import argparse
 import math
 import random
+import time
 from Sudoku import Sudoku
 
 
@@ -34,6 +35,8 @@ def encode_puzzle_in_dimacs(puzzle_path: str, grid_size: int = 4):
             if char.isdigit():
                 value = int(char)
                 constraints.append([encode_var(r, c, value)])
+            # TO-DO: Support for 16x16
+
 
     return constraints
 
@@ -49,7 +52,6 @@ def remove_tautologies(sudoku: Sudoku):
 
 def handle_unit_clauses(sudoku: Sudoku):
     unit_clauses = [clause for clause in sudoku.clauses if len(clause) == 1]
-    #print(f"Unit Clauses: {unit_clauses}\n")
     for clause in unit_clauses:
         unit_literal = clause[0]
         variable = abs(unit_literal)
@@ -59,12 +61,8 @@ def handle_unit_clauses(sudoku: Sudoku):
 
     sudoku.clauses = [clause for clause in sudoku.clauses if len(clause) != 1]
 
-    #print(f"Assignments: {sudoku.assignments}\n")
     true_literals = {literal if value else -literal for literal, value in sudoku.assignments.items() if value}
     false_literals = {-literal if value else literal for literal, value in sudoku.assignments.items() if not value}
-    #print(f"True literals: {true_literals}\n")
-    #print(f"False literals: {false_literals}\n")
-
 
     removed_clauses = []
     updated_clauses = []
@@ -97,8 +95,7 @@ def handle_unit_clauses(sudoku: Sudoku):
 
     unit_clauses_left = [clause for clause in updated_clauses if len(clause) == 1]
     sudoku.clauses = updated_clauses
-    #print(f"UNIT LEFT: {unit_clauses_left}\n")
-    #print(f"Removed clauses: {removed_clauses}\n")
+
     if unit_clauses_left:
         handle_unit_clauses(sudoku)
 
@@ -179,13 +176,13 @@ def apply_mom_heuristic(sudoku: Sudoku):
         return None
 
 
-def splitting(sudoku: Sudoku):
+def splitting(sudoku: Sudoku, heuristic):
     if all_clauses_satisfied(sudoku):
         print("Solution found!")
         return True
 
     if not all_clauses_consistent(sudoku):
-        print("Conflict encountered, backtracking...")
+        #print("Conflict encountered, backtracking...")
         return False
 
     # Step 3: Perform unit propagation
@@ -197,86 +194,71 @@ def splitting(sudoku: Sudoku):
         return True
 
     #variable = pick_random_variable(sudoku)
-    variable = apply_mom_heuristic(sudoku)
+    variable = heuristic(sudoku)
     if variable is None:
         return False
     sudoku.split_vars.remove(variable)
 
     # Step 6: Try assigning True and recursively solve
-    print(f"Splitting on variable: {variable} with True")
+    #print(f"Splitting on variable: {variable} with True")
+    sudoku.n_splits += 1
     sudoku.assignments[variable] = True
     sudoku_cloned = sudoku.clone()  # Clone Sudoku for backtracking
     handle_unit_clauses(sudoku_cloned)
-    #sudoku_cloned.clauses = simplify_formula(sudoku_cloned.clauses, variable, True)
     
-    if splitting(sudoku_cloned):
+    if splitting(sudoku_cloned, heuristic):
         sudoku.assignments = sudoku_cloned.assignments
         return True
 
     # Step 7: Try assigning False if True didn't work
-    print(f"Splitting on variable: {variable} with False")
+    #print(f"Splitting on variable: {variable} with False")
+    sudoku.n_splits += 1
     sudoku.assignments[variable] = False
     sudoku_cloned = sudoku.clone()  # Clone Sudoku for backtracking
     handle_unit_clauses(sudoku_cloned)
-    #sudoku_cloned.clauses = simplify_formula(sudoku_cloned.clauses, variable, False)
 
-    if splitting(sudoku_cloned):
+    if splitting(sudoku_cloned, heuristic):
         sudoku.assignments = sudoku_cloned.assignments
         return True
 
     # Step 8: If both fail, backtrack
-    print(f"Backtracking on variable: {variable}")
+    #print(f"Backtracking on variable: {variable}")
+    sudoku.n_backtracks += 1
     return False
 
 
-def simplify_formula(clauses, variable, value):
-    """
-    Simplify the formula based on the given variable assignment.
-    """
-    true_literal = variable if value else -variable
-    false_literal = -true_literal
+def basic_dpll(sudoku: Sudoku):
+    start_time = time.time()
 
-    simplified_clauses = []
-    for clause in clauses:
-        if true_literal in clause:
-            continue  # Clause is satisfied, skip it
-        new_clause = [lit for lit in clause if lit != false_literal]
-        simplified_clauses.append(new_clause)
+    get_candidate_variables(sudoku)
 
-    return simplified_clauses
+    splitting(sudoku, pick_random_variable)
+
+    end_time = time.time()
+    sudoku.runtime = end_time - start_time
+
+    sudoku.print_solved_sudoku()
+    sudoku.output_solution()
 
 
-def print_sudoku(variables):
-    # Initialize a 9x9 grid with empty values (.)
-    grid = [['.' for _ in range(9)] for _ in range(9)]
-    
-    # Loop through each variable in the list and place the value in the correct grid position
-    for var in variables:
-        row = (var // 100) - 1  # Get the row (subtract 1 to match 0-indexing)
-        col = (var % 100) // 10 - 1  # Get the column (subtract 1 to match 0-indexing)
-        value = var % 10  # Get the value (last digit)
-        
-        # Ensure row and col are within bounds
-        if 0 <= row < 9 and 0 <= col < 9:
-            grid[row][col] = str(value)
-        else:
-            print(f"Error: Invalid variable {var}, out of bounds.")
+def mom_dpll(sudoku: Sudoku):
+    start_time = time.time()
 
-    # Print the Sudoku grid with lines separating 3x3 subgrids
-    for r in range(9):
-        if r % 3 == 0 and r != 0:
-            print("-" * 21)  # Print a separator line after every 3 rows
-        row_display = ""
-        for c in range(9):
-            if c % 3 == 0 and c != 0:
-                row_display += " | "  # Add a vertical separator after every 3 columns
-            row_display += grid[r][c] + " "
-        print(row_display)
+    get_candidate_variables(sudoku)
+
+    splitting(sudoku, apply_mom_heuristic)
+
+    end_time = time.time()
+    sudoku.runtime = end_time - start_time
+
+    sudoku.print_solved_sudoku()
 
 
+def vsids_dpll(sudoku: Sudoku):
+    pass
 
-def simple_dpll(rules_file, puzzle_file, grid_size):
-    # Encode rules and puzzle in dimacs
+
+def encode_rules_and_constraints(rules_file, puzzle_file, grid_size):
     rules = encode_rules_in_dimac(rules_file)
     constraints = encode_puzzle_in_dimacs(puzzle_file, grid_size)
     sudoku = Sudoku(
@@ -284,7 +266,8 @@ def simple_dpll(rules_file, puzzle_file, grid_size):
         constraints=constraints,
         clauses=rules+constraints,
         grid_size=grid_size,
-        n_vars=grid_size*grid_size*grid_size
+        n_vars=grid_size*grid_size*grid_size,
+        filename=os.path.splitext(os.path.basename(puzzle_file))[0]
     )
 
     init_simplification(sudoku)
@@ -292,14 +275,17 @@ def simple_dpll(rules_file, puzzle_file, grid_size):
     if not sudoku.satisfiable:
         print(f"Sudoku not satisfiable!\n")
         return
+    
+    return sudoku
 
-    get_candidate_variables(sudoku)
 
-    splitting(sudoku)
-
-    true_literals = {literal if value else -literal for literal, value in sudoku.assignments.items() if value}
-    print(f"Solved Sudoku:\n")
-    print_sudoku(true_literals)
+def select_heuristic(strategy, sudoku):
+    if strategy == 1:
+        basic_dpll(sudoku)
+    elif strategy == 2:
+        mom_dpll(sudoku)
+    elif strategy == 3:
+        vsids_dpll(sudoku)
 
 
 def get_grid_size(puzzle_path):
@@ -312,22 +298,15 @@ def get_grid_size(puzzle_path):
     return grid_size
 
 
-
-# Check for the empty clause -> a unit clause that evaluates to FALSE 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--strategy", type=int, default=1, help="n=1 for basic DP")
+    parser.add_argument("--strategy", type=int, default=1, help="n=1 for basic DP, n=2 for MOM's heuristic, n=3 for VSIDS heuristic")
     parser.add_argument("--puzzle_file", type=str)
     args = parser.parse_args()
 
     grid_size = get_grid_size(args.puzzle_file)
     rules_file = f"rules/sudoku-rules-{grid_size}x{grid_size}.txt"
-    print(f"RULES FILE: {rules_file}\n")
 
-    if args.strategy == 1:
-        simple_dpll(rules_file, args.puzzle_file, grid_size)
-    elif args.strategy == 2:
-        pass
-    elif args.strategy == 3:
-        pass
+    sudoku = encode_rules_and_constraints(rules_file, args.puzzle_file, grid_size)
+    select_heuristic(args.strategy, sudoku)
