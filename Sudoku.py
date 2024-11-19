@@ -13,6 +13,8 @@ class Sudoku:
         self.grid_size = grid_size if grid_size is not None else None
         self.split_vars = []
         self.candidate_vars = []
+        self.variable_scores = {i: 0 for i in range(1, n_vars + 1)}
+        self.conflicting_clauses = []
         #self.split_assignments = {}
         # Performence related
         self.runtime = 0.0
@@ -31,6 +33,10 @@ class Sudoku:
         sudoku_copy.assignments = deepcopy(self.assignments)
         sudoku_copy.split_vars = deepcopy(self.split_vars)
         sudoku_copy.satisfiable = self.satisfiable
+        sudoku_copy.n_splits = self.n_splits
+        sudoku_copy.n_backtracks = self.n_backtracks
+        sudoku_copy.variable_scores = self.variable_scores.copy()
+        sudoku_copy.conflicting_clauses = self.conflicting_clauses.copy()
         return sudoku_copy
     
     def print_performence_stats(self):

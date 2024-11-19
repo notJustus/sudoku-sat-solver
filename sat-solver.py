@@ -66,6 +66,7 @@ def handle_unit_clauses(sudoku: Sudoku):
 
     removed_clauses = []
     updated_clauses = []
+    conflicting_clauses = []
 
     for clause in sudoku.clauses:
         modified_clause = []
@@ -90,11 +91,15 @@ def handle_unit_clauses(sudoku: Sudoku):
         if not remove_clause:
             # If empty clause found, sudoku not satisfiable
             if not modified_clause:
+                conflicting_clauses.append(clause)
                 sudoku.satisfiable = False
             updated_clauses.append(modified_clause)
 
     unit_clauses_left = [clause for clause in updated_clauses if len(clause) == 1]
     sudoku.clauses = updated_clauses
+
+    if conflicting_clauses:
+        sudoku.conflicting_clauses.extend(conflicting_clauses)
 
     if unit_clauses_left:
         handle_unit_clauses(sudoku)
@@ -254,8 +259,105 @@ def mom_dpll(sudoku: Sudoku):
     sudoku.print_solved_sudoku()
 
 
+
+
+def update_vsids_scores(sudoku: Sudoku, conflicting_clauses):
+    """
+    Increment the VSIDS score for variables in the conflicting clauses.
+    """
+    for clause in conflicting_clauses:
+        for literal in clause:
+            variable = abs(literal)
+            if variable in sudoku.variable_scores:
+                sudoku.variable_scores[variable] += 1
+
+def decay_vsids_scores(sudoku: Sudoku, decay_factor=0.95):
+    """
+    Apply decay to all VSIDS scores.
+    """
+    for variable in sudoku.variable_scores:
+        sudoku.variable_scores[variable] *= decay_factor
+
+def apply_vsids_heuristic(sudoku: Sudoku):
+    """
+    Select the variable with the highest VSIDS score.
+    """
+    unassigned_vars = [v for v in sudoku.split_vars if v not in sudoku.assignments]
+    if not unassigned_vars:
+        return None
+
+    # Select the variable with the highest VSIDS score
+    return max(unassigned_vars, key=lambda var: sudoku.variable_scores.get(var, 0))
+
+
+def splitting_vsids(sudoku: Sudoku, heuristic):
+    if all_clauses_satisfied(sudoku):
+        print("Solution found!")
+        return True
+
+    if not all_clauses_consistent(sudoku):
+        #print("Conflict encountered, backtracking...")
+        return False
+
+    # Step 3: Perform unit propagation
+    handle_unit_clauses(sudoku)
+
+    # Step 4: Check if further simplification has satisfied the problem
+    if all_clauses_satisfied(sudoku):
+        print("Solution found after unit propagation!")
+        return True
+
+    #variable = pick_random_variable(sudoku)
+    variable = heuristic(sudoku)
+    if variable is None:
+        return False
+    sudoku.split_vars.remove(variable)
+
+    # Step 6: Try assigning True and recursively solve
+    #print(f"Splitting on variable: {variable} with True")
+    sudoku.n_splits += 1
+    sudoku.assignments[variable] = True
+    sudoku_cloned = sudoku.clone()  # Clone Sudoku for backtracking
+    handle_unit_clauses(sudoku_cloned)
+    
+    if splitting(sudoku_cloned, heuristic):
+        sudoku.assignments = sudoku_cloned.assignments
+        return True
+
+    # Step 7: Try assigning False if True didn't work
+    #print(f"Splitting on variable: {variable} with False")
+    sudoku.n_splits += 1
+    sudoku.assignments[variable] = False
+    sudoku_cloned = sudoku.clone()  # Clone Sudoku for backtracking
+    handle_unit_clauses(sudoku_cloned)
+
+    if splitting(sudoku_cloned, heuristic):
+        sudoku.assignments = sudoku_cloned.assignments
+        return True
+
+    # Step 8: If both fail, backtrack
+    #print(f"Backtracking on variable: {variable}")
+    sudoku.n_backtracks += 1
+
+    if sudoku.conflicting_clauses:
+        update_vsids_scores(sudoku, sudoku.conflicting_clauses)
+        decay_vsids_scores(sudoku)
+        sudoku.conflicting_clauses = []
+    
+    return False
+
+
 def vsids_dpll(sudoku: Sudoku):
-    pass
+    start_time = time.time()
+
+    get_candidate_variables(sudoku)
+
+    splitting_vsids(sudoku, apply_vsids_heuristic)
+
+    end_time = time.time()
+    sudoku.runtime = end_time - start_time
+
+    sudoku.print_solved_sudoku()
 
 
 def encode_rules_and_constraints(rules_file, puzzle_file, grid_size):
