@@ -45,7 +45,8 @@ class Sudoku:
         sudoku_copy.n_backtracks = self.n_backtracks
         sudoku_copy.n_conflicts = self.n_conflicts
         sudoku_copy.variable_scores = self.variable_scores.copy()
-        sudoku_copy.conflicting_clauses = self.conflicting_clauses.copy()
+        #sudoku_copy.conflicting_clauses = self.conflicting_clauses.copy()
+        sudoku_copy.conflicting_clauses = deepcopy(self.conflicting_clauses)
         return sudoku_copy
     
 
@@ -337,14 +338,14 @@ class Sudoku:
 
 
 
-    def save_performence_stats(self):
+    def save_performence_stats(self, backtrack_count, split_count, conflict_count, unit_clauses_resolved):
         if not os.path.exists("results"):
             os.makedirs("results")
 
         stats_file_name = os.path.join("results", f"{self.filename}_heuristic_{self.heuristic_id}.txt")
         runtime = self.runtime
 
-        stats_line = f"{self.id} {runtime:.2f} {self.n_backtracks} {self.n_splits} {self.n_conflicts}\n"
+        stats_line = f"{self.id} {runtime:.2f} {backtrack_count} {split_count} {conflict_count} {unit_clauses_resolved}\n"
 
         with open(stats_file_name, "a") as stats_file:
             stats_file.write(stats_line)

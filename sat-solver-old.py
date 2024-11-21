@@ -46,13 +46,16 @@ def remove_tautologies(sudoku: Sudoku):
             sudoku.clauses.remove(clause)
 
 
+unit_clauses_resolved = 0
 def handle_unit_clauses(sudoku: Sudoku):
+    global unit_clauses_resolved
     unit_clauses = [clause for clause in sudoku.clauses if len(clause) == 1]
     for clause in unit_clauses:
         unit_literal = clause[0]
         variable = abs(unit_literal)
         value = unit_literal > 0
 
+        unit_clauses_resolved += 1
         sudoku.assignments[variable] = value
 
     sudoku.clauses = [clause for clause in sudoku.clauses if len(clause) != 1]
@@ -177,13 +180,18 @@ def apply_mom_heuristic(sudoku: Sudoku):
         return None
 
 
+backtrack_count = 0
+split_count = 0
+conflict_count = 0
 
 def splitting(sudoku: Sudoku, heuristic):
+    global backtrack_count, split_count, conflict_count
     if all_clauses_satisfied(sudoku):
         print("Solution found!")
         return True
 
     if not all_clauses_consistent(sudoku):
+        conflict_count += 1
         return False
 
     handle_unit_clauses(sudoku)
@@ -198,6 +206,7 @@ def splitting(sudoku: Sudoku, heuristic):
     sudoku.split_vars.remove(variable)
 
     # Try True
+    split_count += 1
     sudoku.assignments[variable] = True
     sudoku_cloned = sudoku.clone()  # Clone Sudoku for backtracking
     handle_unit_clauses(sudoku_cloned)
@@ -207,6 +216,7 @@ def splitting(sudoku: Sudoku, heuristic):
         return True
 
     # Try False
+    backtrack_count += 1
     sudoku.assignments[variable] = False
     sudoku_cloned = sudoku.clone()  # Clone Sudoku for backtracking
     handle_unit_clauses(sudoku_cloned)
@@ -214,6 +224,14 @@ def splitting(sudoku: Sudoku, heuristic):
     if splitting(sudoku_cloned, heuristic):
         sudoku.assignments = sudoku_cloned.assignments
         return True
+    
+    if sudoku.conflicting_clauses:
+        print("###CONFLICT CLAUSE\n")
+        if heuristic == apply_vsids_heuristic:
+            print("Worked")
+            update_vsids_scores(sudoku, sudoku.conflicting_clauses)
+            decay_vsids_scores(sudoku)
+        sudoku.conflicting_clauses = []
 
     return False
 
@@ -230,8 +248,9 @@ def basic_dpll(sudoku: Sudoku):
     end_time = time.time()
     sudoku.runtime = end_time - start_time
 
-    sudoku.print_solved_sudoku()
-    sudoku.output_solution()
+    #sudoku.print_solved_sudoku()
+    #sudoku.output_solution()
+    sudoku.save_performence_stats(backtrack_count, split_count, conflict_count, unit_clauses_resolved)
 
 
 def mom_dpll(sudoku: Sudoku):
@@ -244,7 +263,8 @@ def mom_dpll(sudoku: Sudoku):
     end_time = time.time()
     sudoku.runtime = end_time - start_time
 
-    sudoku.print_solved_sudoku()
+    #sudoku.print_solved_sudoku()
+    sudoku.save_performence_stats(backtrack_count, split_count, conflict_count, unit_clauses_resolved)
 
 
 
@@ -342,12 +362,15 @@ def vsids_dpll(sudoku: Sudoku):
 
     get_candidate_variables(sudoku)
 
-    splitting_vsids(sudoku, apply_vsids_heuristic)
+    #splitting_vsids(sudoku, apply_vsids_heuristic)
+    splitting(sudoku, apply_vsids_heuristic)
 
     end_time = time.time()
     sudoku.runtime = end_time - start_time
 
-    sudoku.print_solved_sudoku()
+    #sudoku.print_solved_sudoku()
+    sudoku.save_performence_stats(backtrack_count, split_count, conflict_count, unit_clauses_resolved)
+
 
 
 def encode_rules_and_constraints(rules_file, puzzle_file, grid_size):
@@ -391,6 +414,7 @@ def get_grid_size(puzzle_path):
 
 
 def test_sudokus(rules_file, puzzle_file, grid_size):
+    global backtrack_count, split_count, conflict_count, unit_clauses_resolved
     rules = encode_rules_in_dimac(rules_file)
     sudoku_id = 0
 
@@ -399,6 +423,10 @@ def test_sudokus(rules_file, puzzle_file, grid_size):
             puzzle = sudoku.strip()
             constraints = encode_puzzle_in_dimacs(puzzle, grid_size)
             print(f"Testing Sudoku: {sudoku_id}\n")
+            backtrack_count = 0
+            split_count = 0
+            conflict_count = 0
+            unit_clauses_resolved = 0
             sudoku = Sudoku(
                 id=sudoku_id,
                 rules=rules,
@@ -409,7 +437,7 @@ def test_sudokus(rules_file, puzzle_file, grid_size):
                 filename=os.path.splitext(os.path.basename(puzzle_file))[0],
                 heuristic_id=1
             )
-            sudoku.init_simplification()
+            init_simplification(sudoku)
 
             if not sudoku.satisfiable:
                 print(f"Sudoku not satisfiable!\n")
@@ -426,7 +454,11 @@ def test_sudokus(rules_file, puzzle_file, grid_size):
                 filename=os.path.splitext(os.path.basename(puzzle_file))[0],
                 heuristic_id=2
             )
-            sudoku.init_simplification()
+            backtrack_count = 0
+            split_count = 0
+            conflict_count = 0
+            unit_clauses_resolved = 0
+            init_simplification(sudoku)
 
             if not sudoku.satisfiable:
                 print(f"Sudoku not satisfiable!\n")
@@ -443,7 +475,11 @@ def test_sudokus(rules_file, puzzle_file, grid_size):
                 filename=os.path.splitext(os.path.basename(puzzle_file))[0],
                 heuristic_id=3
             )
-            sudoku.init_simplification()
+            backtrack_count = 0
+            split_count = 0
+            conflict_count = 0
+            unit_clauses_resolved = 0
+            init_simplification(sudoku)
 
             if not sudoku.satisfiable:
                 print(f"Sudoku not satisfiable!\n")
